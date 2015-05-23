@@ -1,0 +1,128 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "I.T"
+date: "Saturday, May 23, 2015"
+output: html_document
+---
+## Executive Summary
+
+Using random forest modeling, we were able to predict which type of dumbbell activity (out of 6 available) the person was performing.  The model has an accuracy of 99.37% and an out-of-sample error rate of 0.63%.  The results obtained here would suggest that it is possible to predict the type of activity according to accelerometers.
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks.  One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+in this project, our goal was to use data from accelerometers on the belt, forearm, arm, and dumbbell to predict if the person is performing Dumbbell Biceps Curl correctly.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions:
+
+- exactly according to the specification (Class A)
+- throwing the elbows to the front (Class B)
+- lifting the dumbbell only halfway (Class C)
+- lowering the dumbbell only halfway (Class D)
+- throwing the hips to the front (Class E).
+
+## Loading required libraries 
+
+```{r, echo=FALSE}
+setwd("C:/Users/Iso/Desktop")
+```
+
+```{r warning=FALSE, message=FALSE}
+library(caret)
+library(lattice)
+library(ggplot2)
+library(randomForest)
+set.seed(1980)
+```
+
+
+## Loading the Data
+the training data and testing data were downloaded through this links:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+the data was then read into R:
+
+```{r}
+training <- read.csv("pml-training.csv", header = TRUE, na.strings=c("","NA", "NULL", "#DIV/0!"))
+testing <- read.csv("pml-testing.csv", header = TRUE, na.strings=c("","NA", "NULL", "#DIV/0!"))
+```
+
+## Data Procceing
+The data contains some columns that are not used for the prediction (the first 7 columns) - id, name, time stamps, etc'.
+This columns were removed in order to keep a clean data set:
+
+```{r}
+training.tidy <- training[,-(1:7)]
+testing.tidy <- testing[,-(1:7)]
+```
+
+A lot of columns in the data set contain NA's, which could interfere with the analysis. There are different ways of dealing with this problem - in this work we decided to remove columns that have NA's in them:
+```{r}
+training.tidy <- training.tidy[,colSums(is.na(training.tidy)) == 0]
+testing.tidy <- testing.tidy[,colSums(is.na(testing.tidy)) == 0]
+```
+
+Another way to thin down the variable list is to omit near zero variance variables. We do this using the "nearZeroVar" function in the caret package:
+
+```{r}
+nzv_training <- nearZeroVar(training.tidy, saveMetrics = TRUE)
+nzv_testing <- nearZeroVar(testing.tidy, saveMetrics = TRUE)
+sum(nzv_training$nzv)
+sum(nzv_testing$nsv)
+```
+
+Looking at the sum, we can see that there are no variables with near zero variance that need to be omitted from the data. 
+We can now proceed with the prediction model
+
+
+
+## Prediction Model
+
+In order to avoid over fitting the model to the test set, we split the training set to a training set and a "pseudo" test set:
+
+```{r}
+inTrain <- createDataPartition(y=training.tidy$classe, p=0.7, list=FALSE)
+training.df <- training.tidy[inTrain,]
+testing.df <- training.tidy[-inTrain,]
+```
+
+The model that was selected was "random forest". This model yields accurate results and does not require additional assumptions regarding the variables. A 5 fold cross validation will be used.
+
+```{r cache=TRUE, warning=FALSE, message=FALSE}
+modFit <- train(classe ~ . , data=training.df, method="rf", trControl = trainControl(method="cv", number = 4))
+```
+
+To test our model, we will use it to predict on the "pseudo" test set:
+```{r}
+predict_val <- predict(modFit, newdata=testing.df)
+confusionMatrix(predict_val, testing.df$classe)
+```
+
+## Results
+The accuracy of the model is 0.9937 and the out of sample error is 0.0063.
+
+## Prediction
+
+After we have validated our model, we can use it to predict the "real" test set.
+For the sake of submitting the report, we also have to write the prediction to files
+
+```{r}
+predict_test <- predict(modFit,newdata=testing.tidy)
+predict_test
+```
+
+```{r eval=FALSE}
+pml_write_files = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+    }
+pml_write_files(predict_test)
+```
+
+
